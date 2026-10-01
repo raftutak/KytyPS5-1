@@ -1,0 +1,61 @@
+name: Build Astro Bot PR558 Windows
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-2022
+
+    steps:
+      - name: Checkout PR558
+        uses: actions/checkout@v4
+        with:
+          repository: defektu/KytyPS5
+          ref: f9c1e3f
+          submodules: recursive
+
+      - name: Setup Visual Studio environment
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Install glslang
+        shell: pwsh
+        run: |
+          $vcpkgRoot = Split-Path (Get-Command vcpkg).Source
+          vcpkg install glslang[tools,opt]:x64-windows
+          "$vcpkgRoot\installed\x64-windows\tools\glslang" |
+            Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Verify tools
+        shell: cmd
+        run: |
+          cmake --version
+          ninja --version
+          clang-cl --version
+          glslangValidator --version
+
+      - name: Configure
+        shell: cmd
+        run: |
+          cmake -S . -B _Build/windows -G Ninja ^
+            -DCMAKE_BUILD_TYPE=Release ^
+            -DCMAKE_C_COMPILER=clang-cl ^
+            -DCMAKE_CXX_COMPILER=clang-cl ^
+            -DKYTY_BUILD_LAUNCHER=OFF
+
+      - name: Build emulator
+        shell: cmd
+        run: |
+          cmake --build _Build/windows --target kyty_emulator --parallel
+
+      - name: Install
+        shell: cmd
+        run: |
+          cmake --install _Build/windows --prefix _Build/windows/install
+
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: KytyPS5-PR558-f9c1e3f-Windows-x64
+          path: _Build/windows/install/**
+          if-no-files-found: error
